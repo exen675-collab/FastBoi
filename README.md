@@ -87,6 +87,24 @@ nie musi wynosić 7860. Skrypt nie wynajmuje instancji ani nie zmienia ustawień
 [Instrukcja tunelu SSH Vast.ai](https://docs.vast.ai/guides/instances/connect/ssh) ·
 [Mapowanie portów](https://docs.vast.ai/guides/instances/connect/networking)
 
+## Gotowe uruchomienie na RTX PRO 6000 96 GB
+
+Jedna karta 96 GB jedzie na limicie VRAM (pełny model rezydentnie OOM-uje
+przy drugim generowaniu), więc startuj z `--low-vram`:
+
+```bash
+export HF_TOKEN="token"
+git clone https://github.com/exen675-collab/FastBoi.git
+cd FastBoi
+bash start.sh --num-gpus 1 --low-vram --no-browser
+```
+
+`--low-vram` włącza sekwencyjne ładowanie H3 (enkoder zwalniany przed DiT/VAE):
+wolniej o czas przeładowania enkodera co generację, ale stabilnie.
+Token jest potrzebny tylko gdy Hugging Face wymaga autoryzacji; nie zapisuj
+go w repozytorium. Dalej jak w sekcji Vast.ai: tunel SSH na port 7860
+i otwarcie [http://localhost:7860](http://localhost:7860).
+
 ## Start lokalny
 
 Na kompatybilnej maszynie z Linuxem:
