@@ -14,6 +14,26 @@ RUNTIME = ROOT / '.runtime'
 # Pin zgodny z komentarzem w upstream pyproject.toml; budowane ze źródeł,
 # więc wymaga kompilatora CUDA (nvcc) na hoście.
 FLASH_ATTN_PIN = 'flash-attn==2.8.1'
+# Blackwell (SM100+) nie ma kerneli FA2 — źródłowy build 2.8.1 nie może się
+# udać na RTX PRO 6000 / RTX 50xx / B200 / GB200. Wtedy (i przy każdym
+# mismatch nvcc vs torch, np. CUDA 12.8 vs cu130) kontynuujemy z Torch SDPA.
+_BLACKWELL_HINTS = ('blackwell', 'b200', 'gb200', 'gb300', 'rtx 5090', 'rtx 5080',
+                    'rtx 5070', 'rtx 5060', 'rtx pro 6000', 'rtx pro 5000',
+                    'rtx pro 4000', 'dgx spark', 'gb10')
+
+
+def _gpu_names():
+    try:
+        out = subprocess.check_output(
+            ['nvidia-smi', '--query-gpu=name', '--format=csv,noheader'], text=True)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ''
+    return out
+
+
+def _is_blackwell(names):
+    lowered = names.lower()
+    return any(hint in lowered for hint in _BLACKWELL_HINTS)
 
 
 def run(*args, **kwargs):
@@ -90,9 +110,24 @@ def main():
         run(uv, 'pip', 'install', '--python', python, '--no-sources-package',
             'fastvideo-kernel', '-e', package, env=env, cwd=source)
         if want_fa2:
-            print(f'Instalowanie {FLASH_ATTN_PIN} (kompilacja ze źródeł, może potrwać).', flush=True)
-            run(uv, 'pip', 'install', '--python', python, '--no-cache-dir',
-                FLASH_ATTN_PIN, '--no-build-isolation', env=env)
+            if _is_blackwell(_gpu_names()):
+                print('Pomijam flash-attn 2.8.1: brak kerneli FA2 dla Blackwell '
+                      '(SM100+); gęste warstwy użyją Torch SDPA.', flush=True)
+            else:
+                print(f'Instalowanie {FLASH_ATTN_PIN} (kompilacja ze źródeł, może potrwać).',
+                      flush=True)
+                try:
+                    run(uv, 'pip', 'install', '--python', python, '--no-cache-dir',
+                        FLASH_ATTN_PIN, '--no-build-isolation', env=env)
+                except subprocess.CalledProcessError as exc:
+                    # FA2 jest opcjonalną optymalizacją (upstream wymaga jej tylko
+                    # w komentarzu; validate_profile_dependencies sprawdza FA4,
+                    # nie FA2). Mismatch nvcc vs torch (np. 12.8 vs cu130) albo
+                    # brak prebuilt wheel nie może blokować startu.
+                    print(f'WARNING: instalacja {FLASH_ATTN_PIN} nie powiodła się ({exc}). '
+                          'Kontynuuję z Torch SDPA dla gęstych warstw. '
+                          'Aby nie ponawiać próby, usuń flagę albo użyj --no-fa2.',
+                          flush=True)
         run(uv, 'pip', 'check', '--python', python)
         stamp.write_text(json.dumps(signature))
     env['HF_HOME'] = os.environ.get('HF_HOME', str(ROOT / '.cache/huggingface'))
