@@ -16,7 +16,7 @@ def run(*args, **kwargs):
     subprocess.run([str(a) for a in args], check=True, **kwargs)
 
 
-def hardware_check():
+def hardware_check(allow_low_vram=False):
     if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'AMD64'):
         raise RuntimeError('Ten instalator obsługuje Linux x86_64 / WSL2 z NVIDIA CUDA.')
     result = subprocess.check_output([
@@ -25,10 +25,15 @@ def hardware_check():
     print(result, flush=True)
     rows = [row.split(',') for row in result.strip().splitlines()]
     if sum(int(row[1]) for row in rows) < 60000:
-        raise RuntimeError('Za mało VRAM dla standardowego FastH3 BF16. '
-                           'Próg instalatora to 60 GB łącznie (nie gwarantuje działania). '
-                           'Konfiguracja referencyjna autora: 4 × B200. '
-                           'RTX 4060 8 GB nie jest obsługiwana przez ten profil.')
+        message = ('Za mało VRAM dla standardowego FastH3 BF16. '
+                   'Próg instalatora to 60 GB łącznie (nie gwarantuje działania). '
+                   'Konfiguracja referencyjna autora: 4 × B200. '
+                   'RTX 4060 8 GB nie jest obsługiwana przez ten profil.')
+        if allow_low_vram:
+            print('WARNING: bypassing 60GB VRAM gate at user request; full BF16 model will likely OOM.',
+                  flush=True)
+        else:
+            raise RuntimeError(f'{message} Użyj --allow-low-vram, aby kontynuować na własne ryzyko.')
     return 'cu130' if min(int(row[2].strip().split('.')[0]) for row in rows) >= 580 else 'cu126'
 
 
@@ -39,11 +44,13 @@ def main():
     parser.add_argument('--num-gpus', type=int, default=1)
     parser.add_argument('--profile', choices=['portable', 'blackwell'], default='portable')
     parser.add_argument('--check', action='store_true', help='Tylko kontrola sprzętu')
+    parser.add_argument('--allow-low-vram', action='store_true',
+                        help='Pomiń próg 60 GB VRAM (kontynuacja na własne ryzyko, zwykle OOM)')
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
     if args.num_gpus < 1 or 56 % args.num_gpus:
         parser.error('Liczba GPU musi dzielić 56: 1, 2, 4, 7, 8, 14, 28, 56.')
-    backend = hardware_check()
+    backend = hardware_check(allow_low_vram=args.allow_low_vram)
     if args.check:
         return
     if args.profile == 'blackwell' and backend != 'cu130':
@@ -77,8 +84,11 @@ def main():
     env['HF_HOME'] = os.environ.get('HF_HOME', str(ROOT / '.cache/huggingface'))
     env['FASTBOI_SOURCE'] = str(source)
     # Validate actual CUDA visibility and the selected devices before downloading.
-    run(python, ROOT / 'prepare.py', '--num-gpus', args.num_gpus,
-        '--profile', args.profile, env=env)
+    prepare_cmd = [python, ROOT / 'prepare.py', '--num-gpus', args.num_gpus,
+                   '--profile', args.profile]
+    if args.allow_low_vram:
+        prepare_cmd.append('--allow-low-vram')
+    run(*prepare_cmd, env=env)
     command = [str(python), str(ROOT / 'app.py'), '--host', args.host, '--port', str(args.port),
                '--num-gpus', str(args.num_gpus), '--profile', args.profile]
     if args.no_browser:

@@ -12,6 +12,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--num-gpus', type=int, required=True)
     parser.add_argument('--profile', required=True)
+    parser.add_argument('--allow-low-vram', action='store_true',
+                        help='Pomiń próg 60 GB VRAM (kontynuacja na własne ryzyko, zwykle OOM)')
     args = parser.parse_args()
     if not torch.cuda.is_available() or torch.cuda.device_count() < args.num_gpus:
         raise RuntimeError('Brak wymaganej liczby GPU widocznych dla PyTorch/CUDA_VISIBLE_DEVICES.')
@@ -24,7 +26,12 @@ def main():
         if args.profile == 'blackwell' and (props.major, props.minor) != (10, 0):
             raise RuntimeError('Profil blackwell/sm100a jest przeznaczony dla B200/GB200 (SM100).')
     if total < 60_000 * 1024**2:
-        raise RuntimeError('Wybrane GPU mają mniej niż 60 GB VRAM łącznie. Zwiększ --num-gpus.')
+        message = 'Wybrane GPU mają mniej niż 60 GB VRAM łącznie. Zwiększ --num-gpus.'
+        if args.allow_low_vram:
+            print('WARNING: bypassing 60GB VRAM gate at user request; full BF16 model will likely OOM.',
+                  flush=True)
+        else:
+            raise RuntimeError(f'{message} Lub dodaj --allow-low-vram, aby kontynuować na własne ryzyko.')
     config = json.loads(Path('config.json').read_text())
     cache = Path(os.environ['HF_HOME']) / 'hub'
     cache.mkdir(parents=True, exist_ok=True)

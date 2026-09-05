@@ -19,6 +19,20 @@ Instalator wykryje zbyt małą pamięć przed pobraniem wag.
 - Próg 60 GB VRAM łącznie jest tylko wstępnym filtrem instalatora, **nie minimalną
   konfiguracją potwierdzoną testami**. Pamięć aktywacji, enkodera i VAE może wymagać
   znacznie więcej. Nie zakładaj, że dowolny zestaw kart sumujący się do 60 GB zadziała.
+- Pominięcie progu: `bash start.sh --allow-low-vram ...` zamienia błąd w ostrzeżenie
+  (dotyczy obu kontroli: `bootstrap.py` i `prepare.py`). To jest kontynuacja na własne
+  ryzyko — pełny model BF16 (~148 GB) poniżej progu zwykle kończy się OOM w CUDA.
+  Kontrole architektury (Ampere+, profil Blackwell tylko na SM100) pozostają obowiązkowe.
+- `PulpCut/FastH3-VSA-INT8-ConvRot` **nie jest zamiennikiem `model_id` w tym repo.**
+  Zawiera wyłącznie jeden plik `diffusion_models/..._int8_convrot.safetensors` (~23 GB)
+  dla natywnego silnika H3ddle (Apple Silicon / Metal); zgodnie z kartą modelu
+  "This file is not a Diffusers checkpoint". Brakuje enkodera tekstu, VAE, tokenizera
+  i konfiguracji Diffusers, więc `basic_fasth3.py --model-path` go nie wczyta.
+  Dlatego `config.json` celowo pozostaje na pełnym `FastVideo/...-VSA-DataFree`.
+- Vast.ai: **H100 80 GB (1 karta) przechodzi próg 60 GB bez flagi** i jest sensownym
+  wyborem dla tego profilu BF16. **RTX 5090 32 GB wymaga `--allow-low-vram`, ale
+  samych wag BF16 nie zmieści** — flaga tylko odblokowuje start, nie naprawia OOM.
+  Na 5090 potrzebny byłby inny silnik/kwantyzacja, którego FastVideo w tym pinie nie daje.
 - Kompletny snapshot ma około **148 GB** (wagi i komponenty). Przeznacz orientacyjnie
   250 GB dysku na środowisko, cache i wyniki. Instalator sprawdza miejsce na brakujące pliki.
   Offload używa również RAM hosta; dobierz duży zapas RAM (orientacyjnie 256 GB lub więcej,
@@ -50,6 +64,9 @@ bash start.sh --num-gpus 4 --profile blackwell --no-browser
 Dla innych GPU użyj np. `bash start.sh --num-gpus 2 --no-browser` — tylko jeżeli
 wybrany sprzęt ma wystarczającą pamięć. Domyślny `portable` używa VSA Triton,
 wyłącza FA4 i kompilację oraz włącza sharding DiT przy wielu kartach.
+Na H100 80 GB: `bash start.sh --num-gpus 1 --no-browser` (bez flagi).
+Na RTX 5090 32 GB start wymaga `--allow-low-vram`, ale spodziewaj się OOM —
+patrz uwaga o progu powyżej.
 
 Po komunikacie o gotowym serwerze otwórz na swoim komputerze
 [http://localhost:7860](http://localhost:7860). Pozostaw tunel SSH aktywny.

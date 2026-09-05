@@ -11,6 +11,9 @@ class PreflightTests(unittest.TestCase):
         with patch('bootstrap.subprocess.check_output', return_value='RTX 4060, 8188, 591.86\n'), \
                 self.assertRaisesRegex(RuntimeError, 'Za mało VRAM'):
             bootstrap.hardware_check()
+        with patch('bootstrap.subprocess.check_output', return_value='RTX 4060, 8188, 591.86\n'):
+            # Opt-in bypass: warns instead of raising (still expected to OOM later).
+            self.assertEqual(bootstrap.hardware_check(allow_low_vram=True), 'cu130')
 
     @patch('bootstrap.platform.system', return_value='Linux')
     @patch('bootstrap.platform.machine', return_value='x86_64')
