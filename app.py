@@ -59,9 +59,11 @@ def main():
     parser.add_argument('--port', type=int, default=7860)
     parser.add_argument('--num-gpus', type=int, default=1)
     parser.add_argument('--profile', choices=['portable', 'blackwell'], default='portable')
+    parser.add_argument('--low-vram', action='store_true',
+                        help='Oszczędzaj VRAM na 1 GPU (sekwencyjne ładowanie H3: wolniej, ale stabilniej).')
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
-    backend = Backend(args.num_gpus, args.profile)
+    backend = Backend(args.num_gpus, args.profile, low_vram=args.low_vram)
     atexit.register(backend.close)
     auth = None
     if args.host not in ('127.0.0.1', 'localhost', '::1'):

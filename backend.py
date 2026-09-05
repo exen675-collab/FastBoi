@@ -28,26 +28,41 @@ def validate_request(prompt, size, seed):
 
 
 class Backend:
-    def __init__(self, num_gpus=1, profile='portable'):
+    def __init__(self, num_gpus=1, profile='portable', low_vram=False):
         self.num_gpus = num_gpus
         self.profile = profile
+        # Tryb awaryjny na 1 GPU: koduje Qwen3-VL, zwalnia go (~66 GB),
+        # dopiero potem ładuje DiT + VAE. Wolniejsze (przeładowanie
+        # enkodera co generację), ale schodzi z piku VRAM, który przy
+        # w pełni rezydującym modelu OOM-uje w video_decoding_stage.
+        self.low_vram = low_vram
         self.generator = None
         self.recipe = None
         self.args = None
         self.lock = threading.Lock()
 
+    def build_argv(self, model_path):
+        argv = ['--model-path', model_path, '--prompt', 'init', '--num-gpus', str(self.num_gpus),
+                '--steps', '5', '--no-warmup', '--repeats', '1', '--execution-backend', 'mp']
+        if self.profile == 'portable':
+            argv += ['--no-replicated-dit', '--vsa-kernel', 'triton', '--no-fa4',
+                     '--no-inference-torch-compile', '--no-compile-vae', '--profile', 'strict']
+        if self.low_vram:
+            argv += ['--h3-sequential-load']
+        return argv
+
     def load(self):
+        # Musi być ustawione przed startem workerów CUDA (mp dziedziczy env).
+        # expandable_segments to dokładnie to, co sugeruje komunikat
+        # torch.OutOfMemoryError przy fragmentacji alokatora.
+        os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
         source = Path(os.environ.get('FASTBOI_SOURCE', ROOT / '.runtime/FastVideo'))
         script = source / 'examples/inference/basic/basic_fasth3.py'
         spec = importlib.util.spec_from_file_location('fastboi_recipe', script)
         self.recipe = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.recipe)
         model_path = (ROOT / '.runtime/model-path.txt').read_text().strip()
-        argv = ['--model-path', model_path, '--prompt', 'init', '--num-gpus', str(self.num_gpus),
-                '--steps', '5', '--no-warmup', '--repeats', '1', '--execution-backend', 'mp']
-        if self.profile == 'portable':
-            argv += ['--no-replicated-dit', '--vsa-kernel', 'triton', '--no-fa4',
-                     '--no-inference-torch-compile', '--no-compile-vae', '--profile', 'strict']
+        argv = self.build_argv(model_path)
         self.args = self.recipe.parse_args(argv)
         self.recipe.configure_environment(self.args)
         self.recipe.validate_profile_dependencies(self.args)

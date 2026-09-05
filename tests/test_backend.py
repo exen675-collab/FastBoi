@@ -34,6 +34,14 @@ class BackendTests(unittest.TestCase):
             self.assertTrue(Path(first[0]).exists())
             self.assertEqual(json.loads(Path(first[1]).read_text())['seed'], 42)
 
+    def test_low_vram_adds_sequential_load(self):
+        default = backend.Backend().build_argv('/model')
+        self.assertNotIn('--h3-sequential-load', default)
+        low = backend.Backend(low_vram=True).build_argv('/model')
+        self.assertIn('--h3-sequential-load', low)
+        # Profil portable bez zmian.
+        self.assertIn('--profile', default)
+
     def test_failure_resets_engine(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(backend, 'ROOT', Path(temp)):
             engine = backend.Backend()

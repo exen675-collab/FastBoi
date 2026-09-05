@@ -52,6 +52,8 @@ def main():
                         help='Pomiń próg 60 GB VRAM (kontynuacja na własne ryzyko, zwykle OOM)')
     parser.add_argument('--no-fa2', action='store_true',
                         help='Pomiń instalację FlashAttention-2 (gęste warstwy użyją Torch SDPA)')
+    parser.add_argument('--low-vram', action='store_true',
+                        help='Oszczędzaj VRAM w runtime (sekwencyjne ładowanie H3; wolniej, ale stabilniej na 1 GPU)')
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
     if args.num_gpus < 1 or 56 % args.num_gpus:
@@ -101,8 +103,15 @@ def main():
     if args.allow_low_vram:
         prepare_cmd.append('--allow-low-vram')
     run(*prepare_cmd, env=env)
+    # OOM w VAE decode to zwykle fragmentacja alokatora przy piku VRAM;
+    # expandable_segments to zalecenie z samego komunikatu PyTorch.
+    # setdefault: świadoma konfiguracja użytkownika ma pierwszeństwo.
+    # Musi trafić do env przed execve, bo workery CUDA dziedziczą je przy starcie.
+    env.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
     command = [str(python), str(ROOT / 'app.py'), '--host', args.host, '--port', str(args.port),
                '--num-gpus', str(args.num_gpus), '--profile', args.profile]
+    if args.low_vram:
+        command.append('--low-vram')
     if args.no_browser:
         command.append('--no-browser')
     os.execve(str(python), command, env)
