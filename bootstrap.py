@@ -10,6 +10,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / '.runtime'
+# FA2 dla gęstych warstw w profilu portable (fallback zamiast Torch SDPA).
+# Pin zgodny z komentarzem w upstream pyproject.toml; budowane ze źródeł,
+# więc wymaga kompilatora CUDA (nvcc) na hoście.
+FLASH_ATTN_PIN = 'flash-attn==2.8.1'
 
 
 def run(*args, **kwargs):
@@ -46,6 +50,8 @@ def main():
     parser.add_argument('--check', action='store_true', help='Tylko kontrola sprzętu')
     parser.add_argument('--allow-low-vram', action='store_true',
                         help='Pomiń próg 60 GB VRAM (kontynuacja na własne ryzyko, zwykle OOM)')
+    parser.add_argument('--no-fa2', action='store_true',
+                        help='Pomiń instalację FlashAttention-2 (gęste warstwy użyją Torch SDPA)')
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
     if args.num_gpus < 1 or 56 % args.num_gpus:
@@ -74,11 +80,17 @@ def main():
     run('git', '-C', source, 'checkout', '--detach', revision)
     env = {**os.environ, 'UV_TORCH_BACKEND': backend}
     stamp = RUNTIME / 'installed.json'
-    signature = {'revision': revision, 'backend': backend, 'profile': args.profile}
+    want_fa2 = args.profile == 'portable' and not args.no_fa2
+    signature = {'revision': revision, 'backend': backend, 'profile': args.profile,
+                 'fa2': FLASH_ATTN_PIN if want_fa2 else None}
     if not stamp.exists() or json.loads(stamp.read_text()) != signature:
         package = f'{source}[fasth3]' if args.profile == 'blackwell' else str(source)
         run(uv, 'pip', 'install', '--python', python, '--no-sources-package',
             'fastvideo-kernel', '-e', package, env=env, cwd=source)
+        if want_fa2:
+            print(f'Instalowanie {FLASH_ATTN_PIN} (kompilacja ze źródeł, może potrwać).', flush=True)
+            run(uv, 'pip', 'install', '--python', python, '--no-cache-dir',
+                FLASH_ATTN_PIN, '--no-build-isolation', env=env)
         run(uv, 'pip', 'check', '--python', python)
         stamp.write_text(json.dumps(signature))
     env['HF_HOME'] = os.environ.get('HF_HOME', str(ROOT / '.cache/huggingface'))
