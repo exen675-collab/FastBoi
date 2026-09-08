@@ -151,6 +151,27 @@ To model preview text-to-audio-video; interfejs nie obsługuje wejściowych obra
 Wyniki zapisują się w `outputs/<id>/`; nie są automatycznie kasowane.
 Przed usunięciem wynajętej instancji pobierz wyniki i zabezpiecz dane na wolumenie.
 
+## Batch: wiele scen z pliku JSON
+
+Możesz wygenerować nieograniczoną listę scen z jednego pliku JSON (storyboard).
+Format i pola (w tym `duration_*` oraz `reference_images` pod przyszłe I2V / innych agentów):
+**[docs/batch-scenes.md](docs/batch-scenes.md)**. Przykład: `examples/scenes.example.json`.
+
+```bash
+# Walidacja bez GPU
+python batch_scenes.py examples/scenes.example.json --dry-run
+
+# Na maszynie z modelem (to samo API co UI)
+python batch_scenes.py scenes.json --mode local --num-gpus 1
+
+# Albo przeciwko działającemu serwerowi Gradio (np. tunel Vast.ai)
+python batch_scenes.py scenes.json --mode gradio --endpoint http://127.0.0.1:7860
+```
+
+Obecny silnik FastH3 stosuje z JSON tylko **prompt / size / seed**. Długość jest stała
+(~5 s), obrazy referencyjne są zapisywane w metadanych, ale **nie warunkują** generacji.
+`--num-gpus` nadal sharduje **jedną** generację — runner idzie scena po scenie.
+
 ## Diagnostyka i zakres weryfikacji
 
 ```bash
