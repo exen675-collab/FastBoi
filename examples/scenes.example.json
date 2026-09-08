@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "defaults": {
+    "size": "Poziomo · 1344 × 768",
+    "seed": -1,
+    "duration_seconds": 5.17,
+    "fps": 24,
+    "num_frames": 124
+  },
+  "scenes": [
+    {
+      "id": "s01_rain_neon",
+      "prompt": "A cinematic close-up of rain falling on a neon-lit Tokyo street at night. Slow push-in. Soft rainfall and distant city traffic.",
+      "seed": 101,
+      "duration_seconds": 5.17,
+      "reference_image_count": 0,
+      "reference_images": [],
+      "notes": "Cold open / establishing"
+    },
+    {
+      "id": "s02_couple_window",
+      "prompt": "Medium shot of a man with short dark hair and a neat beard and a woman with dark wavy hair standing by a rainy apartment window overlooking city lights. Warm indoor key light, cool blue window fill. They share a quiet look. Soft ambient room tone and rain on glass.",
+      "size": "Pionowo · 768 × 1344",
+      "seed": 202,
+      "duration_seconds": 5.17,
+      "reference_image_count": 2,
+      "reference_images": [
+        { "index": 1, "path": "refs/asia.png" },
+        { "index": 2, "path": "refs/adam.jpg" }
+      ],
+      "notes": "Refs are recorded for agents/future I2V; current FastH3 path is text-only."
+    },
+    {
+      "id": "s03_taxi",
+      "prompt": "Back seat of a moving taxi at night, city lights sliding across two people sitting close. Intimate quiet tension, fully clothed, cinematic shallow depth of field. Soft engine hum and muffled rain.",
+      "seed": 303,
+      "reference_image_count": 2,
+      "reference_images": [
+        { "index": 1, "path": "refs/asia.png" },
+        { "index": 2, "url": "https://example.com/optional-remote-ref.jpg" }
+      ]
+    }
+  ]
+}
